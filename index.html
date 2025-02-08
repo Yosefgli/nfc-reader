@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="he">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>קורא NFC</title>
+</head>
+<body>
+    <h1>קורא NFC</h1>
+    <button id="startScan">התחל סריקה</button>
+    <pre id="output">לחץ על הכפתור והצמד כרטיס NFC</pre>
+
+    <script>
+        document.getElementById('startScan').addEventListener('click', async () => {
+            if ('NDEFReader' in window) {
+                try {
+                    const ndef = new NDEFReader();
+                    await ndef.scan();
+                    document.getElementById('output').textContent = 'ממתין לכרטיס...';
+
+                    ndef.addEventListener('reading', event => {
+                        const { serialNumber, message } = event;
+                        let output = `מספר סידורי: ${serialNumber}\n`;
+                        
+                        if (message.records.length > 0) {
+                            message.records.forEach((record, index) => {
+                                output += `\nרשומה ${index + 1}:\n`;
+                                output += `סוג: ${record.recordType}\n`;
+                                output += `MIME: ${record.mediaType || 'לא זמין'}\n`;
+                                output += `נתונים: ${record.data ? new TextDecoder().decode(record.data) : 'אין נתונים'}\n`;
+                            });
+                        } else {
+                            output += '\nאין רשומות לקריאה';
+                        }
+                        
+                        document.getElementById('output').textContent = output;
+                    });
+                } catch (error) {
+                    document.getElementById('output').textContent = 'שגיאה: ' + error;
+                }
+            } else {
+                document.getElementById('output').textContent = 'הדפדפן אינו תומך ב-NFC';
+            }
+        });
+    </script>
+</body>
+</html>
