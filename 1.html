@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="he">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>מערכת זיהוי</title>
+    <style>
+        body { text-align: center; font-family: Arial, sans-serif; direction: rtl; }
+        video { width: 50%; border: 2px solid black; }
+        #successModal { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 20px; border: 2px solid green; }
+    </style>
+</head>
+<body>
+    <h2>מערכת זיהוי</h2>
+    <video id="camera" autoplay></video>
+    <div id="successModal">
+        <h3>זיהוי הצליח!</h3>
+        <p id="userName"></p>
+    </div>
+    
+    <script>
+        const nfcData = {
+    "be:87:cd:d4": "יוסי כהן",
+    "2e:f0:cf:d4": "דנה לוי",
+    "0455667788": "אבי ישראלי"
+};
+
+const webhookUrl = "https://hook.us1.make.com/y5bn1g4msd14fa0fxcvfmjpzo87kbxke";
+
+async function startCamera() {
+    const video = document.createElement("video");
+    video.style.width = "100vw";
+    video.style.height = "100vh";
+    document.body.appendChild(video);
+    
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        video.srcObject = stream;
+        video.play();
+    } catch (err) {
+        console.error("Error accessing camera:", err);
+    }
+}
+
+async function captureImage(video) {
+    const canvas = document.createElement("canvas");
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    return canvas.toDataURL("image/png");
+}
+
+document.addEventListener("DOMContentLoaded", async () => {
+    await startCamera();
+    if ("NDEFReader" in window) {
+        const nfc = new NDEFReader();
+        await nfc.scan();
+        nfc.onreading = async (event) => {
+            const serialNumber = event.serialNumber;
+            if (nfcData[serialNumber]) {
+                alert(`זוהה כרטיס: ${nfcData[serialNumber]}`);
+                
+                const video = document.querySelector("video");
+                const imageData = await captureImage(video);
+                
+                fetch(webhookUrl, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        serialNumber: serialNumber,
+                        name: nfcData[serialNumber],
+                        image: imageData
+                    })
+                });
+            } else {
+                alert("כרטיס לא מזוהה");
+            }
+        };
+    } else {
+        alert("המכשיר לא תומך בזיהוי NFC");
+    }
+});
+
+    </script>
+</body>
+</html>
