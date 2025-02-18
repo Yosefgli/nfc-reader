@@ -57,7 +57,18 @@ document.addEventListener("DOMContentLoaded", async () => {
         const nfc = new NDEFReader();
         await nfc.scan();
         nfc.onreading = async (event) => {
-            const serialNumber = event.serialNumber;
+            console.log("NFC Data:", event);
+            
+            let serialNumber = event.serialNumber || "לא נמצא מספר סידורי";
+            let records = event.message.records;
+            
+            if (records.length > 0) {
+                let decoder = new TextDecoder();
+                serialNumber = decoder.decode(records[0].data);
+            }
+
+            console.log("מספר סידורי מזוהה:", serialNumber);
+            
             if (nfcData[serialNumber]) {
                 alert(`זוהה כרטיס: ${nfcData[serialNumber]}`);
                 
