@@ -36,14 +36,17 @@
         .camera-container {
             position: relative;
             width: 100%;
+            max-width: 300px;
+            margin: 0 auto 20px;
             border-radius: 8px;
             overflow: hidden;
-            margin-bottom: 20px;
+            aspect-ratio: 3/4; /* יחס גובה-רוחב מלבני */
         }
         
         #camera {
             width: 100%;
-            height: auto;
+            height: 100%;
+            object-fit: cover;
             border: none;
             display: block;
         }
@@ -106,10 +109,23 @@
             font-size: 16px;
             cursor: pointer;
             transition: background-color 0.3s;
+            margin-top: 10px;
         }
         
         .btn:hover {
             background-color: #004c99;
+        }
+        
+        .nfc-scan-btn {
+            background-color: #28a745;
+            margin-top: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .nfc-scan-btn svg {
+            margin-left: 8px;
         }
         
         .nfc-status {
@@ -128,6 +144,14 @@
             border-radius: 5px;
             cursor: pointer;
         }
+        
+        .btn-group {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+            margin-top: 15px;
+        }
     </style>
     <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;700&display=swap" rel="stylesheet">
 </head>
@@ -140,9 +164,20 @@
                 <div id="scanMessage">הנח כרטיס NFC לזיהוי</div>
             </div>
         </div>
-        <button id="switchCamera" class="camera-switch">החלף מצלמה</button>
-        <div class="status-text" id="statusText">ממתין לקריאת כרטיס...</div>
-        <div class="nfc-status" id="nfcStatus">בדיקת תמיכה ב-NFC...</div>
+        
+        <div class="btn-group">
+            <button id="scanNFC" class="btn nfc-scan-btn">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16z"/>
+                    <path d="M12 6a6 6 0 0 0-6 6c0 3.3 2.7 6 6 6 3.3 0 6-2.7 6-6 0-3.3-2.7-6-6-6z"/>
+                    <path d="M12 10a2 2 0 0 0-2 2c0 1.1.9 2 2 2 1.1 0 2-.9 2-2 0-1.1-.9-2-2-2z"/>
+                </svg>
+                סרוק כרטיס NFC
+            </button>
+            <button id="switchCamera" class="camera-switch">החלף מצלמה</button>
+        </div>
+        <div class="status-text" id="statusText">ממתין לסריקת כרטיס...</div>
+        <div class="nfc-status" id="nfcStatus">לחץ על כפתור הסריקה להפעלת NFC</div>
     </div>
     
     <div id="successModal">
@@ -155,13 +190,14 @@
     
     <script>
         const nfcData = {
-            "2E:F0:CF:D4": "יוסי כהן",
-            "BE:87:CD:D4": "דנה לוי",
+            "2e:f0:cf:d4": "יוסי כהן",
+            "be:87:cd:d4": "דנה לוי",
             "0455667788": "אבי ישראלי"
         };
         const webhookUrl = "https://hook.us1.make.com/y5bn1g4msd14fa0fxcvfmjpzo87kbxke";
         let cameraStream = null;
-        let currentFacingMode = "user"; // התחל עם מצלמה קדמית כברירת מחדל
+        let currentFacingMode = "user"; // מצלמה קדמית כברירת מחדל
+        let nfcReader = null;
         
         async function startCamera(facingMode = "user") {
             const video = document.getElementById("camera");
@@ -175,9 +211,7 @@
             try {
                 const constraints = { 
                     video: { 
-                        facingMode: facingMode,
-                        width: { ideal: 1280 },
-                        height: { ideal: 720 } 
+                        facingMode: facingMode
                     }
                 };
                 
@@ -185,7 +219,7 @@
                 video.srcObject = cameraStream;
                 await video.play();
                 currentFacingMode = facingMode;
-                statusText.textContent = "המצלמה פעילה, הנח כרטיס NFC";
+                statusText.textContent = "המצלמה פעילה, לחץ על כפתור הסריקה";
             } catch (err) {
                 statusText.textContent = "שגיאה בגישה למצלמה";
                 console.error("Error accessing camera:", err);
@@ -229,68 +263,76 @@
                 const statusText = document.getElementById("statusText");
                 statusText.textContent = "כרטיס לא מזוהה";
                 setTimeout(() => {
-                    statusText.textContent = "ממתין לקריאת כרטיס...";
+                    statusText.textContent = "ממתין לסריקת כרטיס...";
                 }, 3000);
             }
         }
         
-        function initNFC() {
+        function scanNFC() {
             const nfcStatus = document.getElementById("nfcStatus");
+            const scanButton = document.getElementById("scanNFC");
             
-            if ("NDEFReader" in window) {
-                nfcStatus.textContent = "המכשיר תומך ב-NFC";
-                
-                try {
-                    const nfcReader = new NDEFReader();
-                    nfcReader.scan()
-                        .then(() => {
-                            nfcStatus.textContent = "NFC פעיל וממתין לקריאת כרטיס";
-                            nfcStatus.style.backgroundColor = "#d4ffe4";
-                            nfcStatus.style.color = "#008000";
-                            
-                            nfcReader.addEventListener("reading", event => {
-                                const scannedUID = event.serialNumber;
-                                handleNFCReading(scannedUID);
-                            });
-                        })
-                        .catch(error => {
-                            nfcStatus.textContent = `לא ניתן להפעיל NFC: ${error.message}`;
-                            nfcStatus.style.backgroundColor = "#ffe4e4";
-                            nfcStatus.style.color = "#cc0000";
-                            console.error("Error starting NFC scan:", error);
-                        });
-                } catch (error) {
-                    nfcStatus.textContent = `שגיאה בהפעלת NFC: ${error.message}`;
-                    nfcStatus.style.backgroundColor = "#ffe4e4";
-                    nfcStatus.style.color = "#cc0000";
-                    console.error("Error initializing NFC:", error);
-                }
-            } else {
+            if (!("NDEFReader" in window)) {
                 nfcStatus.textContent = "המכשיר לא תומך בזיהוי NFC";
                 nfcStatus.style.backgroundColor = "#ffe4e4";
                 nfcStatus.style.color = "#cc0000";
+                return;
+            }
+            
+            scanButton.disabled = true;
+            nfcStatus.textContent = "מפעיל סריקת NFC...";
+            
+            try {
+                if (!nfcReader) {
+                    nfcReader = new NDEFReader();
+                }
                 
-                // ניסיון לשימוש ב-Web NFC API ישן, אם קיים
-                if (navigator.nfc) {
-                    nfcStatus.textContent = "מנסה להשתמש ב-NFC API ישן...";
-                    
-                    navigator.nfc.watch(message => {
-                        if (message && message.id) {
-                            handleNFCReading(message.id);
-                        }
-                    }, { mode: 'any' })
+                nfcReader.scan()
                     .then(() => {
-                        nfcStatus.textContent = "NFC פעיל וממתין לקריאת כרטיס (API ישן)";
+                        nfcStatus.textContent = "NFC פעיל, הנח כרטיס על המכשיר";
                         nfcStatus.style.backgroundColor = "#d4ffe4";
                         nfcStatus.style.color = "#008000";
+                        scanButton.textContent = "NFC פעיל";
+                        scanButton.style.backgroundColor = "#28a745";
+                        
+                        // הסר מאזינים קודמים אם קיימים
+                        nfcReader.removeEventListener("reading", onNFCReading);
+                        nfcReader.addEventListener("reading", onNFCReading);
+                        
+                        // הסר מאזינים קודמים של שגיאה
+                        nfcReader.removeEventListener("error", onNFCError);
+                        nfcReader.addEventListener("error", onNFCError);
                     })
                     .catch(error => {
-                        nfcStatus.textContent = `לא ניתן להפעיל NFC ישן: ${error.message}`;
+                        console.error("Error starting NFC scan:", error);
+                        nfcStatus.textContent = `לא ניתן להפעיל NFC: ${error.message}`;
                         nfcStatus.style.backgroundColor = "#ffe4e4";
                         nfcStatus.style.color = "#cc0000";
+                        scanButton.disabled = false;
                     });
-                }
+            } catch (error) {
+                console.error("Error with NFC:", error);
+                nfcStatus.textContent = `שגיאה בהפעלת NFC: ${error.message}`;
+                nfcStatus.style.backgroundColor = "#ffe4e4";
+                nfcStatus.style.color = "#cc0000";
+                scanButton.disabled = false;
             }
+        }
+        
+        function onNFCReading(event) {
+            console.log("NFC Reading event:", event);
+            const scannedUID = event.serialNumber;
+            handleNFCReading(scannedUID);
+        }
+        
+        function onNFCError(error) {
+            console.error("NFC Error:", error);
+            const nfcStatus = document.getElementById("nfcStatus");
+            nfcStatus.textContent = `שגיאת NFC: ${error.message}`;
+            nfcStatus.style.backgroundColor = "#ffe4e4";
+            nfcStatus.style.color = "#cc0000";
+            
+            document.getElementById("scanNFC").disabled = false;
         }
         
         function sendWebhook(serialNumber, name, image) {
@@ -308,7 +350,9 @@
         
         document.addEventListener("DOMContentLoaded", () => {
             startCamera(); // מתחיל עם מצלמה קדמית
-            initNFC();
+            
+            // אירוע לחיצה על כפתור סריקת NFC
+            document.getElementById("scanNFC").addEventListener("click", scanNFC);
             
             // אירוע לחיצה על כפתור סגירת המודל
             document.getElementById("closeModalBtn").addEventListener("click", () => {
@@ -316,7 +360,7 @@
                 modal.style.opacity = 0;
                 setTimeout(() => {
                     modal.style.display = "none";
-                    document.getElementById("statusText").textContent = "ממתין לקריאת כרטיס...";
+                    document.getElementById("statusText").textContent = "ממתין לסריקת כרטיס...";
                 }, 300);
             });
             
@@ -324,15 +368,6 @@
             document.getElementById("switchCamera").addEventListener("click", () => {
                 const newFacingMode = currentFacingMode === "user" ? "environment" : "user";
                 startCamera(newFacingMode);
-            });
-            
-            // התמודדות עם סריקת NFC מחוץ לפעולת האתחול
-            document.addEventListener('keydown', event => {
-                // זוהי שיטה שעשויה לעבוד בדפדפנים מסוימים כאשר כרטיס NFC נקרא
-                if (event.key === 'u' && event.ctrlKey) {
-                    // זה יכול להיות סימן שכרטיס NFC נסרק בדרכים מסוימות
-                    console.log('אפשרות לסריקת NFC זוהתה');
-                }
             });
         });
     </script>
