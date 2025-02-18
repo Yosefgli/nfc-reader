@@ -5,95 +5,272 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>מערכת זיהוי</title>
     <style>
-        body { text-align: center; font-family: Arial, sans-serif; direction: rtl; }
-        video { width: 50%; border: 2px solid black; }
-        #successModal { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 20px; border: 2px solid green; }
+        body {
+            font-family: 'Heebo', Arial, sans-serif;
+            direction: rtl;
+            margin: 0;
+            padding: 0;
+            background-color: #f5f5f5;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
+        
+        .container {
+            width: 90%;
+            max-width: 600px;
+            margin: 20px auto;
+            text-align: center;
+            background-color: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            padding: 20px;
+        }
+        
+        h2 {
+            color: #0066cc;
+            margin-bottom: 20px;
+        }
+        
+        .camera-container {
+            position: relative;
+            width: 100%;
+            border-radius: 8px;
+            overflow: hidden;
+            margin-bottom: 20px;
+        }
+        
+        #camera {
+            width: 100%;
+            height: auto;
+            border: none;
+            display: block;
+        }
+        
+        .camera-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: rgba(0,0,0,0.2);
+            color: white;
+        }
+        
+        .status-text {
+            margin-top: 10px;
+            font-weight: bold;
+            color: #666;
+        }
+        
+        #successModal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0,0,0,0.7);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .modal-content {
+            background-color: white;
+            padding: 30px;
+            border-radius: 10px;
+            width: 80%;
+            max-width: 400px;
+            text-align: center;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+        }
+        
+        #userName {
+            font-size: 24px;
+            font-weight: bold;
+            margin: 15px 0;
+            color: #0066cc;
+        }
+        
+        .btn {
+            background-color: #0066cc;
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 5px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        
+        .btn:hover {
+            background-color: #004c99;
+        }
+        
+        .nfc-status {
+            margin-top: 15px;
+            padding: 10px;
+            background-color: #f0f0f0;
+            border-radius: 5px;
+            font-size: 14px;
+        }
     </style>
+    <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;700&display=swap" rel="stylesheet">
 </head>
 <body>
-    <h2>מערכת זיהוי</h2>
-    <video id="camera" autoplay></video>
+    <div class="container">
+        <h2>מערכת זיהוי</h2>
+        <div class="camera-container">
+            <video id="camera" autoplay playsinline></video>
+            <div class="camera-overlay" id="cameraOverlay">
+                <div id="scanMessage">הנח כרטיס NFC לזיהוי</div>
+            </div>
+        </div>
+        <div class="status-text" id="statusText">ממתין לקריאת כרטיס...</div>
+        <div class="nfc-status" id="nfcStatus">בדיקת תמיכה ב-NFC...</div>
+    </div>
+    
     <div id="successModal">
-        <h3>זיהוי הצליח!</h3>
-        <p id="userName"></p>
+        <div class="modal-content">
+            <h3>זיהוי הצליח!</h3>
+            <p id="userName"></p>
+            <button id="closeModalBtn" class="btn">סגור</button>
+        </div>
     </div>
     
     <script>
         const nfcData = {
-    "2e:f0:cf:d4": "יוסי כהן",
-    "be:87:cd:d4": "דנה לוי",
-    "0455667788": "אבי ישראלי"
-};
-
-const webhookUrl = "https://hook.us1.make.com/y5bn1g4msd14fa0fxcvfmjpzo87kbxke";
-
-async function startCamera() {
-    const video = document.createElement("video");
-    video.style.width = "100vw";
-    video.style.height = "100vh";
-    document.body.appendChild(video);
-    
-    try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-        video.srcObject = stream;
-        video.play();
-    } catch (err) {
-        console.error("Error accessing camera:", err);
-    }
-}
-
-async function captureImage(video) {
-    const canvas = document.createElement("canvas");
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    const ctx = canvas.getContext("2d");
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    return canvas.toDataURL("image/png");
-}
-
-document.addEventListener("DOMContentLoaded", async () => {
-    await startCamera();
-    if ("NDEFReader" in window) {
-        try {
-            const nfcReader = new NDEFReader();
-            await nfcReader.scan();
-
-            nfcReader.onreading = async (event) => {
-                event.preventDefault();
-                let scannedUID = event.serialNumber.trim();
+            "2e:f0:cf:d4": "יוסי כהן",
+            "be:87:cd:d4": "דנה לוי",
+            "0455667788": "אבי ישראלי"
+        };
+        const webhookUrl = "https://hook.us1.make.com/y5bn1g4msd14fa0fxcvfmjpzo87kbxke";
+        let cameraStream = null;
+        
+        async function startCamera() {
+            const video = document.getElementById("camera");
+            const statusText = document.getElementById("statusText");
+            
+            try {
+                const constraints = { 
+                    video: { 
+                        facingMode: "environment",
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 } 
+                    } 
+                };
                 
-                if (nfcData[scannedUID]) {
-                    alert(`זוהה כרטיס: ${nfcData[scannedUID]}`);
-                    
-                    const video = document.querySelector("video");
-                    const imageData = await captureImage(video);
-                    
-                    sendWebhook(scannedUID, nfcData[scannedUID], imageData);
-                } else {
-                    alert("כרטיס לא מזוהה");
-                }
-            };
-        } catch (error) {
-            console.error("❌ שגיאה:", error.message);
+                cameraStream = await navigator.mediaDevices.getUserMedia(constraints);
+                video.srcObject = cameraStream;
+                await video.play();
+                statusText.textContent = "המצלמה פעילה, הנח כרטיס NFC";
+            } catch (err) {
+                statusText.textContent = "שגיאה בגישה למצלמה";
+                console.error("Error accessing camera:", err);
+            }
         }
-    } else {
-        alert("⚠️ המכשיר לא תומך בזיהוי NFC");
-    }
-});
-
-function sendWebhook(serialNumber, name, image) {
-    fetch(webhookUrl, {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json"
-        },
-        body: JSON.stringify({ serialNumber, name, image })
-    })
-    .then(response => response.json())
-    .then(data => console.log("🚀 וובהוק נשלח בהצלחה:", data))
-    .catch(error => console.error("❌ שגיאה בשליחת הוובהוק:", error));
-}
-
+        
+        async function captureImage() {
+            const video = document.getElementById("camera");
+            const canvas = document.createElement("canvas");
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            const ctx = canvas.getContext("2d");
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            return canvas.toDataURL("image/jpeg", 0.8);
+        }
+        
+        function showSuccessModal(name) {
+            const modal = document.getElementById("successModal");
+            const userName = document.getElementById("userName");
+            userName.textContent = name;
+            modal.style.display = "flex";
+            
+            // אנימציה פשוטה להופעת המודל
+            modal.style.opacity = 0;
+            setTimeout(() => {
+                modal.style.transition = "opacity 0.3s";
+                modal.style.opacity = 1;
+            }, 10);
+        }
+        
+        function initNFC() {
+            const nfcStatus = document.getElementById("nfcStatus");
+            
+            if ("NDEFReader" in window) {
+                nfcStatus.textContent = "המכשיר תומך ב-NFC";
+                
+                const nfcReader = new NDEFReader();
+                nfcReader.scan()
+                    .then(() => {
+                        nfcStatus.textContent = "NFC פעיל וממתין לקריאת כרטיס";
+                        nfcStatus.style.backgroundColor = "#d4ffe4";
+                        nfcStatus.style.color = "#008000";
+                        
+                        nfcReader.onreading = async (event) => {
+                            const scannedUID = event.serialNumber;
+                            const statusText = document.getElementById("statusText");
+                            
+                            if (nfcData[scannedUID]) {
+                                statusText.textContent = `זוהה כרטיס: ${nfcData[scannedUID]}`;
+                                
+                                const imageData = await captureImage();
+                                sendWebhook(scannedUID, nfcData[scannedUID], imageData);
+                                
+                                showSuccessModal(nfcData[scannedUID]);
+                            } else {
+                                statusText.textContent = "כרטיס לא מזוהה";
+                                setTimeout(() => {
+                                    statusText.textContent = "ממתין לקריאת כרטיס...";
+                                }, 3000);
+                            }
+                        };
+                    })
+                    .catch(error => {
+                        nfcStatus.textContent = `לא ניתן להפעיל NFC: ${error.message}`;
+                        nfcStatus.style.backgroundColor = "#ffe4e4";
+                        nfcStatus.style.color = "#cc0000";
+                        console.error("Error starting NFC scan:", error);
+                    });
+            } else {
+                nfcStatus.textContent = "המכשיר לא תומך בזיהוי NFC";
+                nfcStatus.style.backgroundColor = "#ffe4e4";
+                nfcStatus.style.color = "#cc0000";
+            }
+        }
+        
+        function sendWebhook(serialNumber, name, image) {
+            fetch(webhookUrl, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({ serialNumber, name, image })
+            })
+            .then(response => response.json())
+            .then(data => console.log("🚀 וובהוק נשלח בהצלחה:", data))
+            .catch(error => console.error("❌ שגיאה בשליחת הוובהוק:", error));
+        }
+        
+        document.addEventListener("DOMContentLoaded", () => {
+            startCamera();
+            initNFC();
+            
+            // אירוע לחיצה על כפתור סגירת המודל
+            document.getElementById("closeModalBtn").addEventListener("click", () => {
+                const modal = document.getElementById("successModal");
+                modal.style.opacity = 0;
+                setTimeout(() => {
+                    modal.style.display = "none";
+                    document.getElementById("statusText").textContent = "ממתין לקריאת כרטיס...";
+                }, 300);
+            });
+        });
     </script>
 </body>
 </html>
