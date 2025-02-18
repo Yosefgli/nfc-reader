@@ -20,8 +20,8 @@
     
     <script>
         const nfcData = {
-    "be:87:cd:d4": "יוסי כהן",
-    "2e:f0:cf:d4": "דנה לוי",
+    "2e:f0:cf:d4": "יוסי כהן",
+    "be:87:cd:d4": "דנה לוי",
     "0455667788": "אבי ישראלי"
 };
 
@@ -54,44 +54,45 @@ async function captureImage(video) {
 document.addEventListener("DOMContentLoaded", async () => {
     await startCamera();
     if ("NDEFReader" in window) {
-        const nfc = new NDEFReader();
-        await nfc.scan();
-        nfc.onreading = async (event) => {
-            console.log("NFC Data:", event);
-            
-            let serialNumber = event.serialNumber || "לא נמצא מספר סידורי";
-            let records = event.message.records;
-            
-            if (records.length > 0) {
-                let decoder = new TextDecoder();
-                serialNumber = decoder.decode(records[0].data);
-            }
+        try {
+            const nfcReader = new NDEFReader();
+            await nfcReader.scan();
 
-            console.log("מספר סידורי מזוהה:", serialNumber);
-            
-            if (nfcData[serialNumber]) {
-                alert(`זוהה כרטיס: ${nfcData[serialNumber]}`);
+            nfcReader.onreading = async (event) => {
+                event.preventDefault();
+                let scannedUID = event.serialNumber.trim();
                 
-                const video = document.querySelector("video");
-                const imageData = await captureImage(video);
-                
-                fetch(webhookUrl, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        serialNumber: serialNumber,
-                        name: nfcData[serialNumber],
-                        image: imageData
-                    })
-                });
-            } else {
-                alert("כרטיס לא מזוהה");
-            }
-        };
+                if (nfcData[scannedUID]) {
+                    alert(`זוהה כרטיס: ${nfcData[scannedUID]}`);
+                    
+                    const video = document.querySelector("video");
+                    const imageData = await captureImage(video);
+                    
+                    sendWebhook(scannedUID, nfcData[scannedUID], imageData);
+                } else {
+                    alert("כרטיס לא מזוהה");
+                }
+            };
+        } catch (error) {
+            console.error("❌ שגיאה:", error.message);
+        }
     } else {
-        alert("המכשיר לא תומך בזיהוי NFC");
+        alert("⚠️ המכשיר לא תומך בזיהוי NFC");
     }
 });
+
+function sendWebhook(serialNumber, name, image) {
+    fetch(webhookUrl, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ serialNumber, name, image })
+    })
+    .then(response => response.json())
+    .then(data => console.log("🚀 וובהוק נשלח בהצלחה:", data))
+    .catch(error => console.error("❌ שגיאה בשליחת הוובהוק:", error));
+}
 
     </script>
 </body>
